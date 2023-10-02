@@ -11,8 +11,10 @@ x-build: &ls-build
   context: ./lodestar
   dockerfile: ${LS_DOCKERFILE}
   args:
-    - BUILD_TARGET=${LS_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${LS_DOCKER_TAG}
+    - BUILD_TARGET=${LS_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${LS_SRC_REPO:-https://github.com/ChainSafe/lodestar}
+    - DOCKER_TAG=${LS_DOCKER_TAG:-latest}
+    - DOCKER_REPO=${LS_DOCKER_REPO:-chainsafe/lodestar}
 
 services:
   consensus:
@@ -35,6 +37,8 @@ services:
       - BEACON_STATS_MACHINE=${BEACON_STATS_MACHINE}
       - CL_EXTRAS=${CL_EXTRAS:-}
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
+      - NETWORK=${NETWORK}
+      - NODE_OPTIONS=${LODESTAR_HEAP:---max-old-space-size=4096}
     ports:
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/tcp
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/udp
@@ -42,7 +46,6 @@ services:
     entrypoint:
       - docker-entrypoint.sh
       - node
-      - --max-old-space-size=4096
       - /usr/app/node_modules/.bin/lodestar
       - beacon
       - --dataDir
@@ -68,8 +71,6 @@ services:
       - ${CL_MIN_PEER_COUNT:-50}
       - --logLevel
       - ${LOG_LEVEL}
-      - --network
-      - ${NETWORK}
       - --suggestedFeeRecipient
       - ${FEE_RECIPIENT}
     labels:

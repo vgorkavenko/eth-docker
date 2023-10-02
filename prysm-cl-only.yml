@@ -11,9 +11,12 @@ x-build: &prysm-build
   context: ./prysm
   dockerfile: ${PRYSM_DOCKERFILE}
   args:
-    - BUILD_TARGET=${PRYSM_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${PRYSM_DOCKER_TAG}
-    - DOCKER_VC_TAG=${PRYSM_DOCKER_VC_TAG}
+    - BUILD_TARGET=${PRYSM_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${PRYSM_SRC_REPO:-https://github.com/prysmaticlabs/prysm}
+    - DOCKER_TAG=${PRYSM_DOCKER_TAG:-stable}
+    - DOCKER_VC_TAG=${PRYSM_DOCKER_VC_TAG:-stable}
+    - DOCKER_REPO=${PRYSM_DOCKER_REPO:-gcr.io/prysmaticlabs/prysm/beacon-chain}
+    - DOCKER_VC_REPO=${PRYSM_DOCKER_VC_REPO:-gcr.io/prysmaticlabs/prysm/validator}
 
 services:
   consensus:
@@ -35,6 +38,7 @@ services:
       - MEV_NODE=${MEV_NODE}
       - CL_EXTRAS=${CL_EXTRAS:-}
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
+      - NETWORK=${NETWORK}
     ports:
       - ${HOST_IP:-}${PRYSM_PORT}:${PRYSM_PORT}/tcp
       - ${HOST_IP:-}${PRYSM_UDP_PORT}:${PRYSM_UDP_PORT}/udp
@@ -71,7 +75,6 @@ services:
       - ${CL_MAX_PEER_COUNT:-45}
       - --verbosity
       - ${LOG_LEVEL}
-      - --${NETWORK}
       - --accept-terms-of-use
       - --monitoring-host
       - 0.0.0.0

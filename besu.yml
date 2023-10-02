@@ -15,8 +15,10 @@ services:
       context: ./besu
       dockerfile: ${BESU_DOCKERFILE}
       args:
-        - BUILD_TARGET=${BESU_SRC_BUILD_TARGET}
-        - DOCKER_TAG=${BESU_DOCKER_TAG}
+        - BUILD_TARGET=${BESU_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+        - SRC_REPO=${BESU_SRC_REPO:-https://github.com/hyperledger/besu}
+        - DOCKER_TAG=${BESU_DOCKER_TAG:-latest}
+        - DOCKER_REPO=${BESU_DOCKER_REPO:-hyperledger/besu}
     image: besu:local
     user: besu
     environment:
@@ -24,6 +26,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       - EL_EXTRAS=${EL_EXTRAS:-}
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
+      - NETWORK=${NETWORK}
     volumes:
       - besu-eth1-data:/var/lib/besu
       - /etc/localtime:/etc/localtime:ro
@@ -44,8 +47,6 @@ services:
       - --p2p-port
       - ${EL_P2P_PORT:-30303}
       - --rpc-http-enabled
-      - --rpc-http-api
-      - "WEB3,ETH,NET"
       - --rpc-http-host
       - 0.0.0.0
       - --rpc-http-port
@@ -68,14 +69,37 @@ services:
       - --engine-rpc-port=${EE_PORT:-8551}
       - --logging
       - ${LOG_LEVEL}
-      - --network
-      - ${NETWORK}
       - --metrics-enabled
       - --metrics-host
       - 0.0.0.0
       - --metrics-port
       - "6060"
       - --nat-method=DOCKER
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${EL_HOST:-el}.service=${EL_HOST:-el}
+      - traefik.http.routers.${EL_HOST:-el}.entrypoints=websecure
+      - traefik.http.routers.${EL_HOST:-el}.rule=Host(`${EL_HOST:-el}.${DOMAIN}`)
+      - traefik.http.routers.${EL_HOST:-el}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${EL_HOST:-el}lb.service=${EL_HOST:-el}
+      - traefik.http.routers.${EL_HOST:-el}lb.entrypoints=websecure
+      - traefik.http.routers.${EL_HOST:-el}lb.rule=Host(`${EL_LB:-el-lb}.${DOMAIN}`)
+      - traefik.http.routers.${EL_HOST:-el}lb.tls.certresolver=letsencrypt
+      - traefik.http.services.${EL_HOST:-el}.loadbalancer.server.port=${EL_RPC_PORT:-8545}
+      - traefik.http.routers.${EL_WS_HOST:-elws}.service=${EL_WS_HOST:-elws}
+      - traefik.http.routers.${EL_WS_HOST:-elws}.entrypoints=websecure
+      - traefik.http.routers.${EL_WS_HOST:-elws}.rule=Host(`${EL_WS_HOST:-elws}.${DOMAIN}`)
+      - traefik.http.routers.${EL_WS_HOST:-elws}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.service=${EL_WS_HOST:-elws}
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.entrypoints=websecure
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.rule=Host(`${EL_WS_LB:-elws-lb}.${DOMAIN}`)
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.tls.certresolver=letsencrypt
+      - traefik.http.services.${EL_WS_HOST:-elws}.loadbalancer.server.port=${EL_WS_PORT:-8546}
+      - traefik.http.routers.${EE_HOST:-ee}.service=${EE_HOST:-ee}
+      - traefik.http.routers.${EE_HOST:-ee}.entrypoints=websecure
+      - traefik.http.routers.${EE_HOST:-ee}.rule=Host(`${EE_HOST:-ee}.${DOMAIN}`)
+      - traefik.http.routers.${EE_HOST:-ee}.tls.certresolver=letsencrypt
+      - traefik.http.services.${EE_HOST:-ee}.loadbalancer.server.port=${EE_PORT:-8551}
 volumes:
   besu-eth1-data:
   jwtsecret:

@@ -1,8 +1,11 @@
 ARG DOCKER_TAG
-FROM ghcr.io/paradigmxyz/reth:${DOCKER_TAG}
+ARG DOCKER_REPO
+
+FROM ${DOCKER_REPO}:${DOCKER_TAG}
 
 # Unused, this is here to avoid build time complaints
 ARG BUILD_TARGET
+ARG SRC_REPO
 
 ARG USER=reth
 ARG UID=10001
@@ -11,6 +14,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   ca-certificates \
   tzdata \
   gosu \
+  git \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

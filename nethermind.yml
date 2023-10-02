@@ -16,8 +16,10 @@ services:
       context: ./nethermind
       dockerfile: ${NM_DOCKERFILE}
       args:
-        - BUILD_TARGET=${NM_SRC_BUILD_TARGET}
-        - DOCKER_TAG=${NM_DOCKER_TAG}
+        - BUILD_TARGET=${NM_SRC_BUILD_TARGET:-'$(git tag --sort=-committerdate | grep -E "^[0-9]+[.][0-9]+[.][0-9]+$" | head -1)'}
+        - SRC_REPO=${NM_SRC_REPO:-https://github.com/NethermindEth/nethermind}
+        - DOCKER_TAG=${NM_DOCKER_TAG:-latest}
+        - DOCKER_REPO=${NM_DOCKER_REPO:-nethermind/nethermind}
     image: nethermind:local
     user: nethermind
     environment:
@@ -25,6 +27,7 @@ services:
       - EL_EXTRAS=${EL_EXTRAS:-}
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
       - AUTOPRUNE_NM=${AUTOPRUNE_NM:-true}
+      - NETWORK=${NETWORK}
     volumes:
       - nm-eth1-data:/var/lib/nethermind
       - /etc/localtime:/etc/localtime:ro
@@ -39,8 +42,7 @@ services:
     <<: *logging
     entrypoint:
       - docker-entrypoint.sh
-      - dotnet
-      - /nethermind/Nethermind.Runner.dll
+      - /nethermind/nethermind
       - --datadir
       - /var/lib/nethermind
       - --Init.WebSocketsEnabled
@@ -67,29 +69,43 @@ services:
       - 0.0.0.0
       - --JsonRpc.EnginePort
       - ${EE_PORT:-8551}
-      - --JsonRpc.EnabledModules
-      - "Web3,Eth,Subscribe,Net,Health,Parity,Proof,Trace,TxPool"
       - --JsonRpc.AdditionalRpcUrls=http://127.0.0.1:1337|http|admin
       - --JsonRpc.JwtSecretFile=/var/lib/nethermind/ee-secret/jwtsecret
-# Temporary Prysm workaround. Remove when no longer needed
-      - --JsonRpc.MaxBatchSize
-      - "10000"
       - --Metrics.Enabled
       - "true"
       - --Metrics.PushGatewayUrl
       - ""
       - --Metrics.ExposePort
       - "6060"
-      - --config
-      - ${NETWORK}
-      - --Sync.AncientBodiesBarrier
-      - "1"
-      - --Sync.AncientReceiptsBarrier
-      - "1"
       - --Pruning.FullPruningCompletionBehavior
       - AlwaysShutdown
       - --log
       - ${LOG_LEVEL}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${EL_HOST:-el}.service=${EL_HOST:-el}
+      - traefik.http.routers.${EL_HOST:-el}.entrypoints=websecure
+      - traefik.http.routers.${EL_HOST:-el}.rule=Host(`${EL_HOST:-el}.${DOMAIN}`)
+      - traefik.http.routers.${EL_HOST:-el}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${EL_HOST:-el}lb.service=${EL_HOST:-el}
+      - traefik.http.routers.${EL_HOST:-el}lb.entrypoints=websecure
+      - traefik.http.routers.${EL_HOST:-el}lb.rule=Host(`${EL_LB:-el-lb}.${DOMAIN}`)
+      - traefik.http.routers.${EL_HOST:-el}lb.tls.certresolver=letsencrypt
+      - traefik.http.services.${EL_HOST:-el}.loadbalancer.server.port=${EL_RPC_PORT:-8545}
+      - traefik.http.routers.${EL_WS_HOST:-elws}.service=${EL_WS_HOST:-elws}
+      - traefik.http.routers.${EL_WS_HOST:-elws}.entrypoints=websecure
+      - traefik.http.routers.${EL_WS_HOST:-elws}.rule=Host(`${EL_WS_HOST:-elws}.${DOMAIN}`)
+      - traefik.http.routers.${EL_WS_HOST:-elws}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.service=${EL_WS_HOST:-elws}
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.entrypoints=websecure
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.rule=Host(`${EL_WS_LB:-elws-lb}.${DOMAIN}`)
+      - traefik.http.routers.${EL_WS_HOST:-elws}lb.tls.certresolver=letsencrypt
+      - traefik.http.services.${EL_WS_HOST:-elws}.loadbalancer.server.port=${EL_WS_PORT:-8546}
+      - traefik.http.routers.${EE_HOST:-ee}.service=${EE_HOST:-ee}
+      - traefik.http.routers.${EE_HOST:-ee}.entrypoints=websecure
+      - traefik.http.routers.${EE_HOST:-ee}.rule=Host(`${EE_HOST:-ee}.${DOMAIN}`)
+      - traefik.http.routers.${EE_HOST:-ee}.tls.certresolver=letsencrypt
+      - traefik.http.services.${EE_HOST:-ee}.loadbalancer.server.port=${EE_PORT:-8551}
 volumes:
   nm-eth1-data:
   jwtsecret:

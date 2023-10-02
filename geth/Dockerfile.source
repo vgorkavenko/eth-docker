@@ -3,13 +3,15 @@ FROM golang:1.21-alpine as builder
 
 # Unused, this is here to avoid build time complaints
 ARG DOCKER_TAG
+ARG DOCKER_REPO
 
 ARG BUILD_TARGET
+ARG SRC_REPO
 
 RUN apk update && apk add --no-cache make gcc musl-dev linux-headers git bash
 
 WORKDIR /src
-RUN bash -c "git clone https://github.com/ethereum/go-ethereum.git && cd go-ethereum && git config advice.detachedHead false && git fetch --all --tags && \
+RUN bash -c "git clone ${SRC_REPO} go-ethereum && cd go-ethereum && git config advice.detachedHead false && git fetch --all --tags && \
 if [[ ${BUILD_TARGET} =~ pr-.+ ]]; then git fetch origin pull/$(echo ${BUILD_TARGET} | cut -d '-' -f 2)/head:geth-pr; git checkout geth-pr; else git checkout ${BUILD_TARGET}; fi && \
 go run build/ci.go install -static"
 
@@ -21,7 +23,7 @@ ARG UID=10001
 # GID 10002 is deliberate so it can exchange secret with CL
 ARG GID=10002
 
-RUN apk add --no-cache ca-certificates tzdata bash su-exec
+RUN apk add --no-cache ca-certificates tzdata bash su-exec git jq
 
 RUN addgroup \
     --gid "${GID}" \

@@ -1,16 +1,18 @@
 ARG DOCKER_TAG
+ARG DOCKER_REPO
 
-FROM ethereum/client-go:${DOCKER_TAG}
+FROM ${DOCKER_REPO}:${DOCKER_TAG}
 
 # Unused, this is here to avoid build time complaints
 ARG BUILD_TARGET
+ARG SRC_REPO
 
 ARG USER=geth
 ARG UID=10001
 # GID 10002 is deliberate so it can exchange secret with CL
 ARG GID=10002
 
-RUN apk update && apk add --no-cache ca-certificates tzdata bash su-exec
+RUN apk update && apk add --no-cache ca-certificates tzdata bash su-exec git jq
 
 RUN addgroup \
     --gid "${GID}" \

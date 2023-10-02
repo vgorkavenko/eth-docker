@@ -11,8 +11,10 @@ x-build: &teku-build
   context: ./teku
   dockerfile: ${TEKU_DOCKERFILE}
   args:
-    - BUILD_TARGET=${TEKU_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${TEKU_DOCKER_TAG}
+    - BUILD_TARGET=${TEKU_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${TEKU_SRC_REPO:-https://github.com/ConsenSys/teku}
+    - DOCKER_TAG=${TEKU_DOCKER_TAG:-latest}
+    - DOCKER_REPO=${TEKU_DOCKER_REPO:-consensys/teku}
 
 services:
   consensus:
@@ -42,6 +44,7 @@ services:
       - DEFAULT_GRAFFITI=true
       - WEB3SIGNER=false
       - EMBEDDED_VC=false
+      - NETWORK=${NETWORK}
     ports:
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/tcp
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/udp
@@ -55,7 +58,6 @@ services:
       - /opt/teku/bin/teku
       - --data-path=/var/lib/teku
       - --log-destination=CONSOLE
-      - --network=${NETWORK}
       - --ee-endpoint=${EL_NODE}
       - --ee-jwt-secret-file
       - /var/lib/teku/ee-secret/jwtsecret

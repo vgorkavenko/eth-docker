@@ -11,8 +11,10 @@ x-build: &ls-build
   context: ./lodestar
   dockerfile: ${LS_DOCKERFILE}
   args:
-    - BUILD_TARGET=${LS_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${LS_DOCKER_TAG}
+    - BUILD_TARGET=${LS_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${LS_SRC_REPO:-https://github.com/ChainSafe/lodestar}
+    - DOCKER_TAG=${LS_DOCKER_TAG:-latest}
+    - DOCKER_REPO=${LS_DOCKER_REPO:-chainsafe/lodestar}
 
 services:
   consensus:
@@ -35,6 +37,8 @@ services:
       - BEACON_STATS_MACHINE=${BEACON_STATS_MACHINE}
       - CL_EXTRAS=${CL_EXTRAS:-}
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
+      - NETWORK=${NETWORK}
+      - NODE_OPTIONS=${LODESTAR_HEAP:---max-old-space-size=4096}
     ports:
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/tcp
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/udp
@@ -42,7 +46,6 @@ services:
     entrypoint:
       - docker-entrypoint.sh
       - node
-      - --max-old-space-size=4096
       - /usr/app/node_modules/.bin/lodestar
       - beacon
       - --dataDir
@@ -51,6 +54,8 @@ services:
       - 0.0.0.0
       - --rest.port
       - ${CL_REST_PORT:-5052}
+      - --rest.namespace
+      - "beacon,config,events,node,validator,lightclient,debug"
       - --port
       - ${CL_P2P_PORT:-9000}
       - --nat
@@ -68,8 +73,6 @@ services:
       - ${CL_MAX_PEER_COUNT:-50}
       - --logLevel
       - ${LOG_LEVEL}
-      - --network
-      - ${NETWORK}
       - --suggestedFeeRecipient
       - ${FEE_RECIPIENT}
 
@@ -88,6 +91,7 @@ services:
       - GRAFFITI=${GRAFFITI:-}
       - DEFAULT_GRAFFITI=${DEFAULT_GRAFFITI:-false}
       - WEB3SIGNER=${WEB3SIGNER}
+      - NETWORK=${NETWORK}
     volumes:
       - lsvalidator-data:/var/lib/lodestar/validators
       - /etc/localtime:/etc/localtime:ro
@@ -101,7 +105,7 @@ services:
     entrypoint:
       - docker-entrypoint-vc.sh
       - node
-      - --max-old-space-size=4096
+      - --max-old-space-size=2048
       - /usr/app/node_modules/.bin/lodestar
       - validator
       - --dataDir
@@ -121,8 +125,6 @@ services:
       - 0.0.0.0
       - --logLevel
       - ${LOG_LEVEL}
-      - --network
-      - ${NETWORK}
       - --suggestedFeeRecipient
       - ${FEE_RECIPIENT}
       - --force
@@ -139,7 +141,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
     entrypoint:
       - node
-      - --max-old-space-size=4096
+      - --max-old-space-size=2048
       - /usr/app/node_modules/.bin/lodestar
       - validator
       - voluntary-exit
@@ -151,6 +153,7 @@ services:
       - ${LOG_LEVEL}
       - --network
       - ${NETWORK}
+      - --force
 
   validator-keys:
     profiles: ["tools"]

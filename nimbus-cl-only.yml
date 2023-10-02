@@ -11,9 +11,12 @@ x-build: &nimbus-build
   context: ./nimbus
   dockerfile: ${NIM_DOCKERFILE}
   args:
-    - BUILD_TARGET=${NIM_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${NIM_DOCKER_TAG}
-    - DOCKER_VC_TAG=${NIM_DOCKER_VC_TAG}
+    - BUILD_TARGET=${NIM_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${NIM_SRC_REPO:-https://github.com/status-im/nimbus-eth2}
+    - DOCKER_TAG=${NIM_DOCKER_TAG:-multiarch-latest}
+    - DOCKER_VC_TAG=${NIM_DOCKER_VC_TAG:-multiarch-latest}
+    - DOCKER_REPO=${NIM_DOCKER_REPO:-statusim/nimbus-eth2}
+    - DOCKER_VC_REPO=${NIM_DOCKER_VC_REPO:-statusim/nimbus-validator-client}
 
 services:
   consensus:
@@ -41,6 +44,8 @@ services:
       - ARCHIVE_NODE=${ARCHIVE_NODE:-}
       - GRAFFITI=${GRAFFITI:-}
       - DEFAULT_GRAFFITI=true
+      - WEB3SIGNER=false
+      - EMBEDDED_VC=false
     ports:
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/tcp
       - ${HOST_IP:-}${CL_P2P_PORT:-9000}:${CL_P2P_PORT:-9000}/udp
@@ -58,7 +63,6 @@ services:
       - --tcp-port=${CL_P2P_PORT:-9000}
       - --udp-port=${CL_P2P_PORT:-9000}
       - --max-peers=${CL_MAX_PEER_COUNT:-160}
-      - --network=${NETWORK}
       - --el=${EL_NODE}
       - --jwt-secret=/var/lib/nimbus/ee-secret/jwtsecret
       - --rest

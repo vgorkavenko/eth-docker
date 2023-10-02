@@ -11,8 +11,10 @@ x-build: &ls-build
   context: ./lodestar
   dockerfile: ${LS_DOCKERFILE}
   args:
-    - BUILD_TARGET=${LS_SRC_BUILD_TARGET}
-    - DOCKER_TAG=${LS_DOCKER_TAG}
+    - BUILD_TARGET=${LS_SRC_BUILD_TARGET:-'$(git describe --tags $(git rev-list --tags --max-count=1))'}
+    - SRC_REPO=${LS_SRC_REPO:-https://github.com/ChainSafe/lodestar}
+    - DOCKER_TAG=${LS_DOCKER_TAG:-latest}
+    - DOCKER_REPO=${LS_DOCKER_REPO:-chainsafe/lodestar}
 
 services:
   validator:
@@ -30,6 +32,7 @@ services:
       - GRAFFITI=${GRAFFITI:-}
       - DEFAULT_GRAFFITI=${DEFAULT_GRAFFITI:-false}
       - WEB3SIGNER=${WEB3SIGNER}
+      - NETWORK=${NETWORK}
     volumes:
       - lsvalidator-data:/var/lib/lodestar/validators
       - /etc/localtime:/etc/localtime:ro
@@ -41,7 +44,7 @@ services:
     entrypoint:
       - docker-entrypoint-vc.sh
       - node
-      - --max-old-space-size=4096
+      - --max-old-space-size=2048
       - /usr/app/node_modules/.bin/lodestar
       - validator
       - --dataDir
@@ -61,8 +64,6 @@ services:
       - 0.0.0.0
       - --logLevel
       - ${LOG_LEVEL}
-      - --network
-      - ${NETWORK}
       - --suggestedFeeRecipient
       - ${FEE_RECIPIENT}
       - --force
@@ -79,7 +80,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
     entrypoint:
       - node
-      - --max-old-space-size=4096
+      - --max-old-space-size=2048
       - /usr/app/node_modules/.bin/lodestar
       - validator
       - voluntary-exit
@@ -91,6 +92,7 @@ services:
       - ${LOG_LEVEL}
       - --network
       - ${NETWORK}
+      - --force
 
   validator-keys:
     profiles: ["tools"]
