@@ -161,9 +161,13 @@ prep_conffiles() {
     if [ ! -f "./prometheus/custom-prom.yml" ]; then
         ${__as_owner} touch "./prometheus/custom-prom.yml"
     fi
-# Create ssv-config.yml if it doesn't exist
-    if [ ! -f "./ssv-config.yaml" ]; then
-        ${__as_owner} cp ./ssv-config-sample.yaml ./ssv-config.yaml
+# Move ssv-config.yaml
+    if [ -f "./ssv-config.yaml" ]; then
+        ${__as_owner} mv ./ssv-config.yaml ssv-config/config.yaml
+    fi
+# Create config.yaml if it doesn't exist
+    if [ ! -f "ssv-config/config.yaml" ]; then
+        ${__as_owner} cp ssv-config/config-sample.yaml ssv-config/config.yaml
     fi
 }
 
@@ -224,8 +228,8 @@ continue? (no/yes) " yn
             exit 0
         fi
         if [ -z "$(command -v docker)" ]; then
-            ${__auto_sudo} apt-get update && ${__auto_sudo} apt-get install -y ca-certificates curl gnupg lsb-release \
-                whiptail bc chrony
+            ${__auto_sudo} apt-get update
+            ${__auto_sudo} apt-get install -y ca-certificates curl gnupg lsb-release whiptail chrony pkg-config
             ${__auto_sudo} mkdir -p /etc/apt/keyrings
             ${__auto_sudo} curl -fsSL https://download.docker.com/linux/ubuntu/gpg | ${__auto_sudo} gpg --dearmor \
             --yes -o /etc/apt/keyrings/docker.gpg
@@ -251,7 +255,7 @@ continue? (no/yes) " yn
     elif [[ "$__distro" =~ "debian" ]]; then
         if [ -z "$(command -v docker)" ]; then
             ${__auto_sudo} apt-get update
-            ${__auto_sudo} apt-get -y install ca-certificates curl gnupg lsb-release whiptail bc chrony
+            ${__auto_sudo} apt-get -y install ca-certificates curl gnupg lsb-release whiptail chrony pkg-config
             __major_version=$(lsb_release -r | cut -f2)
             if [ "${__major_version}" -lt 10 ]; then
                 echo "This script cannot install docker on Debian ${__major_version}. Consider upgrading to 11 or 12."
@@ -265,7 +269,8 @@ continue? (no/yes) " yn
                 https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
                 | ${__auto_sudo} tee /etc/apt/sources.list.d/docker.list > /dev/null
             ${__auto_sudo} apt-get update
-            ${__auto_sudo} apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            ${__auto_sudo} apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin \
+                docker-buildx-plugin
             echo "Installed docker-ce and docker-compose-plugin"
         else
             echo "Docker is already installed"
@@ -757,10 +762,20 @@ envmigrate() {
             if [ "${var}" = "COMPOSE_FILE" ]; then
                 migrate_compose_file
             fi
+            if [ "${var}" = "CL_QUIC_PORT" ]; then
+                __cl_port=$(sed -n -e "s/^CL_P2P_PORT=\(.*\)/\1/p" ".env.source" || true)
+                if [ -n "${__cl_port}" ] && [ "${__cl_port}" = "${value}" ]; then
+                    value=$((value + 1))
+                    echo "Adjusted CL_QUIC_PORT to ${value} so it does not conflict with CL_P2P_PORT"
+                fi
+            fi
             if [[ "${var}" = "NETWORK" && "${value}" =~ "prater" ]]; then
                 value="goerli"
             fi
             if [[ "${var}" = "HOST_IP" && "${value: -1}" != ":" ]]; then
+                value="${value}:" # ComposeV1 requires this so I can do v6
+            fi
+            if [[ "${var}" = "SHARE_IP" && "${value: -1}" != ":" ]]; then
                 value="${value}:" # ComposeV1 requires this so I can do v6
             fi
             # Handle & in GRAFFITI gracefully
@@ -875,13 +890,13 @@ migrate_compose_file() {
         lh-grafana.yml lhcc-grafana.yml nimbus-grafana.yml prysm-grafana.yml teku-grafana.yml geth-grafana.yml \
         erigon-grafana.yml oe.yml teku-stats.yml lh-stats.yml lh-stats-consensus.yml lh-stats-validator.yml \
         traefik-shared.yml lighthouse-slasher.yml prysm-slasher.yml el-traefik.yml ee-traefik.yml \
-        prometheus-traefik.yml )
+        prometheus-traefik.yml grafana-localhost.yml )
     TO_YML=( el-shared.yml el-traefik.yml cl-shared.yml grafana-shared.yml prysm-web-shared.yml lighthouse-base.yml \
         lighthouse-vc-only.yml lighthouse-slasher.yml teku-base.yml teku-vc-only.yml lighthouse-cl-only.yml \
         lighthouse-vc-only.yml lodestar-cl-only.yml lodestar-vc-only.yml nimbus-cl-only.yml prysm-cl-only.yml \
         prysm-cl-only.yml prysm-vc-only.yml teku-cl-only.yml teku-vc-only.yml lighthouse-base.yml lighthouse-vc-only.yml \
         lighthouse-cl-only.yml nethermind.yml lighthouse.yml teku.yml nimbus.yml prysm.yml lodestar.yml traefik-cf.yml \
-        validator-keyapi-shared.yml validator-keyapi-shared.yml "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
+        validator-keyapi-shared.yml validator-keyapi-shared.yml "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
 
     __old_grafana=0
     __new_grafana=0
@@ -935,26 +950,26 @@ ssv_switch() {
     echo "SSV Node stopped and database deleted."
     echo ""
     cp blox-ssv-config.yaml blox-ssv-config.yaml.bak
-    cp blox-ssv-config.yaml ssv-config.yaml
+    cp blox-ssv-config.yaml ssv-config/config.yaml
     rm blox-ssv-config.yaml
     echo "Backup copy blox-ssv-config.yaml.bak created"
-    echo "Making changes to ssv-config.yaml"
+    echo "Making changes to ssv-config/config.yaml"
     var="NETWORK"
     NETWORK=$(sed -n -e "s/^${var}=\(.*\)/\1/p" ".env" || true)
     sed -i'' 's/blox-ssv2.yml/ssv.yml/' .env.source
-    if ! grep -q "LogFilePath:" ssv-config.yaml; then
-      sed -i'' '/global:/a\  LogFilePath: /tmp/ssv/debug.log' ssv-config.yaml
+    if ! grep -q "LogFilePath:" ssv-config/config.yaml; then
+      sed -i'' '/global:/a\  LogFilePath: /tmp/ssv/debug.log' ssv-config/config.yaml
     fi
-    if ! grep -q "MetricsAPIPort:" ssv-config.yaml; then
-      sed -i'' '$a\MetricsAPIPort: 15000' ssv-config.yaml
+    if ! grep -q "MetricsAPIPort:" ssv-config/config.yaml; then
+      sed -i'' '$a\MetricsAPIPort: 15000' ssv-config/config.yaml
     fi
-    if ! grep -q "ssv:" ssv-config.yaml; then
-      sed -i '/^  Network:/d' ssv-config.yaml # Remove old eth2 Network line if present
-      sed -i'' '$a\ssv:' ssv-config.yaml
+    if ! grep -q "ssv:" ssv-config/config.yaml; then
+      sed -i '/^  Network:/d' ssv-config/config.yaml # Remove old eth2 Network line if present
+      sed -i'' '$a\ssv:' ssv-config/config.yaml
       if [ "${NETWORK}" = "goerli" ]; then
-        sed -i'' '$a\  Network: jato-v2' ssv-config.yaml
+        sed -i'' '$a\  Network: jato-v2' ssv-config/config.yaml
       elif [ "${NETWORK}" = "mainnet" ]; then
-        sed -i'' '$a\  Network: mainnet' ssv-config.yaml
+        sed -i'' '$a\  Network: mainnet' ssv-config/config.yaml
       else
         echo "${NETWORK} is not something that works with SSV. This needs to be fixed before running ./ethd update again"
         echo "Aborting."
@@ -1877,7 +1892,7 @@ spec? (right-click to paste)" 10 60 3>&1 1>&2 2>&3)
             exitstatus=$?
             if [ $exitstatus -eq 0 ]; then
               if [[ ${NETWORK} =~ ^https?:// ]]; then
-                echo "Your customer testnet URL is: ${NETWORK}"
+                echo "Your custom testnet URL is: ${NETWORK}"
                 break
               else
                 whiptail --msgbox "${NETWORK} is not a valid URL. You can try again or Cancel on the next \
@@ -2633,17 +2648,31 @@ config() {
         query_validator_client
         ;;
       "ssv" | "lido_ssv")
-        if [ ! -f "./ssv-config.yaml" ]; then
-            ${__as_owner} cp ./ssv-config-sample.yaml ./ssv-config.yaml
+        if [ ! -f "./ssv-config/config.yaml" ]; then
+            ${__as_owner} cp ./ssv-config/config-sample.yaml ./ssv-config/config.yaml
         fi
         if [ "${NETWORK}" = "goerli" ]; then
-          sed -i '' 's/  Network: .*/  Network: jato-v2/' ssv-config.yaml
+          sed -i '' 's/  Network: .*/  Network: jato-v2/' ssv-config/config.yaml
         elif [ "${NETWORK}" = "mainnet" ]; then
-          sed -i '' 's/  Network: .*/  Network: mainnet/' ssv-config.yaml
+          sed -i '' 's/  Network: .*/  Network: mainnet/' ssv-config/config.yaml
         else
           echo "${NETWORK} is not something that works with SSV. This needs to be fixed when running ./ethd config again"
           echo "Aborting."
           exit 1
+        fi
+        if [ ! -f "./ssv-config/password.pass" ]; then
+            echo "Creating password file for encrypted SSV secret key"
+            head -c 16 /dev/urandom | base64 | tr -d '[:space:]' >./ssv-config/password.pass
+            ${__auto_sudo} chown 12000:12000 ./ssv-config/password.pass
+            ${__auto_sudo} chmod 600 ./ssv-config/password.pass
+        fi
+        if [ ! -f "./ssv-config/encrypted_private_key.json" ]; then
+            echo "Creating encrypted operator private key"
+            dodocker run --name ssv-node-key-generation -v "$(pwd)/ssv-config/password.pass":/password.pass \
+                -it bloxstaking/ssv-node:latest /go/bin/ssvnode generate-operator-keys \
+                --password-file=/password.pass && dodocker cp ssv-node-key-generation:/encrypted_private_key.json \
+                ./ssv-config/encrypted_private_key.json && dodocker rm ssv-node-key-generation
+            ${__auto_sudo} chown 12000:12000 ./ssv-config/encrypted_private_key.json
         fi
         query_consensus_only_client
         ;;
