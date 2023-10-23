@@ -2529,74 +2529,67 @@ again or Cancel on the next screen." 10 75
     fi
 }
 
-query_lido_obol_cluster_role() {
-    # Possible two roles: Leader and Operator
-    # Leader in charge of the DGK ceremony creation and participate in cluster as one of the operators as well
-    # Operator is in charge of participating in the DGK ceremony, running the node
-    # Any can submit the keys to the Lido contract
-    __lido_obol_cluster_role="leader"
-    __lido_obol_cluster_role=$(whiptail --notags --title "Lido Obol cluster role" --menu "Choose your role" 12 80 3 \
-        "leader" "Leader role - DGK ceremony creator, runner of the node" \
-        "operator" "Operator role - DGK ceremony member, runner of the node" 3>&1 1>&2 2>&3)
-    exitstatus=$?
 
-    if [ $exitstatus -eq 0 ]; then
-        echo "Your role is:" "${__lido_obol_cluster_role}"
-        __lido_obol_operator_enr=""
-        __lido_obol_operator_enr_private_key_path=""
-        __outcome__=$(docompose -f ./obol.yml run --rm charon-create-enr)
-
-        if [ "${__lido_obol_cluster_role}" = "leader" ]; then
-            __lido_obol_operator_enr=""
-             __outcome__=$(docompose -f ./obol.yml run --rm charon-create-enr)
-            if [[ "${__outcome__}" =~ "Created ENR private key:" ]]; then
-                __lido_obol_operator_enr_private_key_path=$(echo "${__outcome__}" | grep -e 'Created ENR private key')
-                __lido_obol_operator_enr=$(echo "${__outcome__}" | grep -e 'enr:')
-            else
-                echo "Something went wrong. Please, try again."
-                exit 1
-            fi
-            OBOL_CLUSTER_NAME=$(whiptail --title "Lido Obol cluster name" --inputbox "Enter your cluster name" 8 60 "${__lido_obol_cluster_name}" 3>&1 1>&2 2>&3)
-            OBOL_CLUSTER_ENR_LIST=$(whiptail --title "Lido Obol cluster ENR list" --inputbox "Enter comma separated list of ENR strings (min 3). Your ENR is already here" 8 60 "${__lido_obol_operator_enr}" 3>&1 1>&2 2>&3)
-            
-            CHARON_NAME=${OBOL_CLUSTER_NAME} CHARON_OPERATOR_ENRS=${OBOL_CLUSTER_ENR_LIST} CHARON_WITHDRAWAL_ADDRESSES=${WITHDRAWAL_CREDENTIALS} CHARON_FEE_RECIPIENT_ADDRESSES=${FEE_RECIPIENT} docompose -f ./obol.yml run --rm charon-create-dkg
-            echo "Your cluster name is:" "${__lido_obol_cluster_name}"
-            echo "Your enr list is:" "${OBOL_CLUSTER_ENR_LIST}"
-            whiptail --title "Artefacts" --msgbox "Creating the ceremony was a success!\n\nPlease, share '${PWD}/.charon/cluster-definition.json' file with other participants" 16 80
-            if (whiptail --title "DKG ceremony" --yesno "Do you want to start DKG ceremony?\n\nMake sure all participants are ready!" 10 60) then
-                __outcome__=$(docompose -f ./obol.yml run --rm charon-run-dkg)
-                if [[ "${__outcome__}" =~ "Successfully completed DKG ceremony" ]]; then
-                    echo "DKG ceremony finished successfully"
+query_lido_obol_flow() {
+    while true; do
+        if [ -d "./.charon" ]; then
+            if [ "$(ls -A ./.charon)" ]; then
+                if (whiptail --title "Lido Obol operator ENR creation" --yesno "It seems that you already have \`.charon\` folder and it isn't empty.\nDo you want to remove it?" 10 80); then
+                    rm -rf ./.charon
                 else
-                    echo "Something went wrong. Please, try again."
-                    exit 1
-                fi
-            fi
-            whiptail --title "Finish" --msgbox "Final steps!\n\n1. Please, open https://operators.lido.fi to submit your keys with '.charon/deposit-data.json' file content\n\n2. Wait for keys validation\n\n3. Run your nodes by './ethd start''" 15 85
-        else
-            if [[ "${__outcome__}" =~ "Created ENR private key:" ]]; then
-                __lido_obol_operator_enr_private_key_path=$(echo "${__outcome__}" | grep -e 'Created ENR private key')
-                __lido_obol_operator_enr=$(echo "${__outcome__}" | grep -e 'enr:')
-                whiptail --title "Lido Obol operator ENR creation outcome" --msgbox "${__lido_obol_operator_enr_private_key_path}\n\nPlease, share your public ENR with Leader!\n\nYour public ENR is: ${__lido_obol_operator_enr}" 16 80
-            else
-                echo "Something went wrong. Please, try again."
-                exit 1
-            fi
-            whiptail --title "Artefacts" --msgbox "Please, get 'cluster-definition.json' file from the Leader\nand paste it to '${PWD}/.charon/' directory" 10 80
-            if (whiptail --title "DKG ceremony" --yesno "Do you want to start DKG ceremony?\n\nMake sure all participants are ready!" 10 60) then
-                __outcome__=$(docompose -f ./obol.yml run --rm charon-run-dkg)
-                if [[ "${__outcome__}" =~ "Successfully completed DKG ceremony" ]]; then
-                    echo "DKG ceremony finished successfully"
-                else
-                    echo "Something went wrong. Please, try again."
-                    exit 1
+                    whiptail --title "Lido Obol operator ENR creation" --msgbox "The \`.charon\` folder must be empty or non-existent for the cluster definition to continue" 10 80
+                    continue
                 fi
             fi
         fi
+        break
+    done
+    __outcome__=$(docompose -f ./obol.yml run --rm charon-create-enr)
+    if [[ "${__outcome__}" =~ "Created ENR private key:" ]]; then
+        __lido_obol_operator_enr_private_key_path=$(echo "${__outcome__}" | grep -e 'Created ENR private key')
+        __lido_obol_operator_enr=$(echo "${__outcome__}" | grep -e 'enr:')
     else
-        echo "You chose Cancel."
+        echo "Something went wrong. Please, try again."
         exit 1
     fi
+
+    echo "Your ENR is:" "${__lido_obol_operator_enr}"
+    whiptail --title "Lido Obol operator ENR creation outcome" --msgbox "${__lido_obol_operator_enr_private_key_path}\n\n** Please, copy your public ENR for the futher steps! **\n\nYour public ENR is:\n\n${__lido_obol_operator_enr}" 16 80
+
+    while true; do
+        __cluster_definition_url=$(whiptail --title "Lido Obol cluster creation" --inputbox "\nThere are a few steps left before the launch!\n\n1. Go to https://${NETWORK}.launchpad.obol.tech/\n2. Init cluster definition (or participate in existing one)\n3. Follow the steps from the launchpad\n4. As a result, you will get a link with the cluster definition.\n\nPlease, put your cluster definition link below:" 16 80 "https://api.obol.tech/dv/example_link_to_your_definition" 3>&1 1>&2 2>&3)
+        exitstatus=$?
+        if [ $exitstatus -eq 0 ]; then
+            __cluster_definition_json=$(curl -s "${__cluster_definition_url}")
+            __cluster_definition_is_valid=$(echo "${__cluster_definition_json}" | jq 'all(.validators[]; .fee_recipient_address == "'${FEE_RECIPIENT}'" and .withdrawal_address == "'${WITHDRAWAL_CREDENTIALS}'")')
+            if [[ "${__cluster_definition_is_valid}" =~ "true" ]]; then
+                echo "Your cluster definition url is:" "${__cluster_definition_url}"
+                echo "${__cluster_definition_json}" > ./.charon/cluster-definition.json
+                break
+            else
+                whiptail --title "Lido Obol cluster creation" --msgbox "Your cluster definition is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '${WITHDRAWAL_CREDENTIALS}'" 14 90
+            fi
+        else
+            echo "You chose Cancel."
+            exit 1
+        fi
+    done
+
+    while true; do
+        if (whiptail --title "DKG ceremony" --yesno "Do you want to start DKG ceremony?\n\nMake sure all participants are ready!" 10 60) then
+            __outcome__=$(docompose -f ./obol.yml run --rm charon-run-dkg)
+            if [[ "${__outcome__}" =~ "Successfully completed DKG ceremony" ]]; then
+             echo "DKG ceremony finished successfully"
+            else
+                echo "Something went wrong. Please, try again."
+                exit 1
+            fi
+            whiptail --title "Finish" --msgbox "Final steps!\n\n1. Please, open https://operators.lido.fi to submit your keys with '.charon/deposit-data.json' file content\n\n2. Wait for keys validation\n\n3. Run your nodes by './ethd start''" 15 85
+            break
+        else
+            whiptail --title "DKG ceremony" --msgbox "You should start DKG ceremony before proceeding further" 8 60
+        fi
+    done
 }
 
 set_value_in_env() {
@@ -2739,9 +2732,7 @@ config() {
     if [ "${__deployment}" = "lido_obol" ]; then
         OBOL_NODE_BEACON_ENDPOINT=$(echo ${CL_NODE})
         CL_NODE="http://obol-node:3600"
-        if (whiptail --title "Following the flows" --yesno "Do you want to follow Leader and Operator flow?" 10 60) then
-            query_lido_obol_cluster_role
-        fi
+        query_lido_obol_flow
     fi
 
     COMPOSE_FILE="${CONSENSUS_CLIENT}"

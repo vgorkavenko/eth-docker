@@ -16,7 +16,7 @@ services:
     <<: *logging
     environment:
       - CHARON_BEACON_NODE_ENDPOINTS=${OBOL_NODE_BEACON_ENDPOINT:-http://consensus:5052}
-      - CHARON_P2P_RELAYS=https://0.relay.obol.tech
+      - CHARON_P2P_RELAYS=${OBOL_P2P_RELAYS:-https://0.relay.obol.tech}
       - CHARON_P2P_TCP_ADDRESS=0.0.0.0:${OBOL_P2P_PORT:-3610}
       - CHARON_VALIDATOR_API_ADDRESS=0.0.0.0:3600
       - CHARON_MONITORING_ADDRESS=0.0.0.0:3620
