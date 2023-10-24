@@ -2561,6 +2561,7 @@ query_lido_obol_flow() {
         exitstatus=$?
         if [ $exitstatus -eq 0 ]; then
             __cluster_definition_json=$(curl -s "${__cluster_definition_url}")
+# shellcheck disable=SC2086
             __cluster_definition_is_valid=$(echo "${__cluster_definition_json}" | jq 'all(.validators[]; .fee_recipient_address == "'${FEE_RECIPIENT}'" and .withdrawal_address == "'${WITHDRAWAL_CREDENTIALS}'")')
             if [[ "${__cluster_definition_is_valid}" =~ "true" ]]; then
                 echo "Your cluster definition url is:" "${__cluster_definition_url}"
@@ -2730,7 +2731,7 @@ config() {
     fi
 
     if [ "${__deployment}" = "lido_obol" ]; then
-        OBOL_NODE_BEACON_ENDPOINT=$(echo ${CL_NODE})
+        OBOL_NODE_BEACON_ENDPOINT=$(echo "${CL_NODE}")
         CL_NODE="http://obol-node:3600"
         query_lido_obol_flow
     fi
