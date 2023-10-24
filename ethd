@@ -2731,7 +2731,7 @@ config() {
     fi
 
     if [ "${__deployment}" = "lido_obol" ]; then
-        OBOL_NODE_BEACON_ENDPOINT=$(echo "${CL_NODE}")
+        OBOL_NODE_BEACON_ENDPOINT="${CL_NODE}"
         CL_NODE="http://obol-node:3600"
         query_lido_obol_flow
     fi
