@@ -2731,6 +2731,8 @@ config() {
     fi
 
     if [ "${__deployment}" = "lido_obol" ]; then
+# We are using the variable
+# shellcheck disable=SC2034
         OBOL_NODE_BEACON_ENDPOINT="${CL_NODE}"
         CL_NODE="http://obol-node:3600"
         query_lido_obol_flow
