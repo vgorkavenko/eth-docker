@@ -2272,7 +2272,7 @@ query_coinbase() {
         if [[ "${__deployment}" =~ "lido_" ]]; then
             case "${NETWORK}" in
                 "goerli")
-                    FEE_RECIPIENT="0x94750381be1aba0504c666ee1db118f68f0780d4"
+                    FEE_RECIPIENT="0x94750381bE1AbA0504C666ee1DB118F68f0780D4"
                     ;;
                 "mainnet")
                     FEE_RECIPIENT="0x388c818ca8b9251b393131c08a736a67ccb19297"
@@ -2530,7 +2530,7 @@ again or Cancel on the next screen." 10 75
 }
 
 
-query_lido_obol_flow() {
+query_lido_obol_enr() {
     while true; do
         if [ -d "./.charon" ]; then
             if [ "$(ls -A ./.charon)" ]; then
@@ -2555,7 +2555,9 @@ query_lido_obol_flow() {
 
     echo "Your ENR is:" "${__lido_obol_operator_enr}"
     whiptail --title "Lido Obol operator ENR creation outcome" --msgbox "${__lido_obol_operator_enr_private_key_path}\n\n** Please, copy your public ENR for the futher steps! **\n\nYour public ENR is:\n\n${__lido_obol_operator_enr}" 16 80
+}
 
+query_lido_obol_cluster_definition() {
     while true; do
         __cluster_definition_url=$(whiptail --title "Lido Obol cluster creation" --inputbox "\nThere are a few steps left before the launch!\n\n1. Go to https://${NETWORK}.launchpad.obol.tech/\n2. Init cluster definition (or participate in existing one)\n3. Follow the steps from the launchpad\n4. As a result, you will get a link with the cluster definition.\n\nPlease, put your cluster definition link below:" 16 80 "https://api.obol.tech/dv/example_link_to_your_definition" 3>&1 1>&2 2>&3)
         exitstatus=$?
@@ -2575,7 +2577,9 @@ query_lido_obol_flow() {
             exit 1
         fi
     done
+}
 
+query_lido_obol_cluster_dkg() {
     while true; do
         if (whiptail --title "DKG ceremony" --yesno "Do you want to start DKG ceremony?\n\nMake sure all participants are ready!" 10 60) then
             __outcome__=$(docompose -f ./obol.yml run --rm charon-run-dkg)
@@ -2696,7 +2700,7 @@ config() {
         if [[ "${__deployment}" =~ "lido_" ]]; then
           case "${NETWORK}" in
               "goerli")
-                  WITHDRAWAL_CREDENTIALS="0x94750381bE1AbA0504C666ee1DB118F68f0780D4"
+                  WITHDRAWAL_CREDENTIALS="0xdc62f9e8C34be08501Cdef4EBDE0a280f576D762"
                   ;;
               "mainnet")
                   WITHDRAWAL_CREDENTIALS="0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f"
@@ -2735,7 +2739,14 @@ config() {
 # shellcheck disable=SC2034
         OBOL_NODE_BEACON_ENDPOINT="${CL_NODE}"
         CL_NODE="http://obol-node:3600"
-        query_lido_obol_flow
+        if (whiptail --title "Lido Obol cluster creation" --yesno "Do you have cluster definition url and ENR?" 10 60) then
+            query_lido_obol_cluster_definition
+            query_lido_obol_cluster_dkg
+        else
+            query_lido_obol_enr
+            query_lido_obol_cluster_definition
+            query_lido_obol_cluster_dkg
+        fi
     fi
 
     COMPOSE_FILE="${CONSENSUS_CLIENT}"
