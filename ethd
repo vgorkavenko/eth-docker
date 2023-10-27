@@ -2554,12 +2554,12 @@ query_lido_obol_enr() {
     fi
 
     echo "Your ENR is:" "${__lido_obol_operator_enr}"
-    whiptail --title "Lido Obol operator ENR creation outcome" --msgbox "${__lido_obol_operator_enr_private_key_path}\n\n** Please, copy your public ENR for the futher steps! **\n\nYour public ENR is:\n\n${__lido_obol_operator_enr}" 16 80
+    whiptail --title "Lido Obol operator ENR creation outcome" --msgbox "${__lido_obol_operator_enr_private_key_path}\n\n1. Backup your private key!\n2. Copy your public ENR for the futher steps\n\nYour public ENR is:\n\n${__lido_obol_operator_enr}" 16 80
 }
 
 query_lido_obol_cluster_definition() {
     while true; do
-        __cluster_definition_url=$(whiptail --title "Lido Obol cluster creation" --inputbox "\nThere are a few steps left before the launch!\n\n1. Go to https://${NETWORK}.launchpad.obol.tech/\n2. Init cluster definition (or participate in existing one)\n3. Follow the steps from the launchpad\n4. As a result, you will get a link with the cluster definition.\n\nPlease, put your cluster definition link below:" 16 80 "https://api.obol.tech/dv/example_link_to_your_definition" 3>&1 1>&2 2>&3)
+        __cluster_definition_url=$(whiptail --title "Lido Obol cluster creation" --inputbox "\nThere are a few steps left before the launch!\n\n1. Go to https://${NETWORK}.launchpad.obol.tech/\n2. Init cluster definition (or participate in existing one if you have invite link)\n3. Follow the steps from the launchpad\n4. As a result, you will get a link with the cluster definition.\n\nPlease, put your cluster definition link below:" 17 80 "https://api.obol.tech/dv/example_link_to_your_definition" 3>&1 1>&2 2>&3)
         exitstatus=$?
         if [ $exitstatus -eq 0 ]; then
             __cluster_definition_json=$(curl -s "${__cluster_definition_url}")
@@ -2584,12 +2584,12 @@ query_lido_obol_cluster_dkg() {
         if (whiptail --title "DKG ceremony" --yesno "Do you want to start DKG ceremony?\n\nMake sure all participants are ready!" 10 60) then
             __outcome__=$(docompose -f ./obol.yml run --rm charon-run-dkg)
             if [[ "${__outcome__}" =~ "Successfully completed DKG ceremony" ]]; then
-             echo "DKG ceremony finished successfully"
+                echo "DKG ceremony finished successfully"
             else
                 echo "Something went wrong. Please, try again."
                 exit 1
             fi
-            whiptail --title "Finish" --msgbox "Final steps!\n\n1. Please, open https://operators.lido.fi to submit your keys with '.charon/deposit-data.json' file content\n\n2. Wait for keys validation\n\n3. Run your nodes by './ethd start''" 15 85
+            whiptail --title "Finish" --msgbox "Final steps!\n\n1. Decide between participants who will submit the keys. If you are - go back to Obol launchpad, follow the form futher and confirm that only you will submit on behalf of the cluster\n\n3. Open https://operators.lido.fi to submit your keys with '.charon/deposit-data.json' file content\n\n3. Wait for keys validation\n\n4. Run your nodes by './ethd start'" 18 85
             break
         else
             whiptail --title "DKG ceremony" --msgbox "You should start DKG ceremony before proceeding further" 8 60
