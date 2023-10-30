@@ -32,19 +32,6 @@ services:
     command: create enr
     volumes:
       - .charon:/opt/charon/.charon
-  charon-create-dkg:
-    profiles: ["tools"]
-    restart: "no"
-    image: obolnetwork/charon:${CHARON_VERSION:-latest}
-    volumes:
-      - .charon:/opt/charon/.charon
-    environment:
-      - CHARON_NAME=${OBOL_CLUSTER_NAME}
-      - CHARON_WITHDRAWAL_ADDRESSES=${WITHDRAWAL_CREDENTIALS}
-      - CHARON_FEE_RECIPIENT_ADDRESSES=${FEE_RECIPIENT}
-      - CHARON_NETWORK=${NETWORK}
-      - CHARON_OPERATOR_ENRS=${OBOL_CLUSTER_ENR_LIST}
-    command: create dkg
   charon-run-dkg:
     profiles: ["tools"]
     restart: "no"

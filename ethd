@@ -2808,10 +2808,6 @@ config() {
     if [ "${__deployment}" = "lido_obol" ]; then
         var=OBOL_NODE_BEACON_ENDPOINT
         set_value_in_env
-        var=OBOL_CLUSTER_NAME
-        set_value_in_env
-        var=OBOL_CLUSTER_ENR_LIST
-        set_value_in_env
     fi
     if [[ "${NETWORK}" = "gnosis" ]] && [[ "${CONSENSUS_CLIENT}" =~ "nimbus" ]] ; then
 # We are using the variable
