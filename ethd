@@ -3049,7 +3049,7 @@ if [ "$__result" -eq 127 ]; then
     printhelp
 fi
 
-# check_disk_space
+check_disk_space
 
 if [ "${__compose_upgraded}" -eq 1 ]; then
   echo
