@@ -953,7 +953,7 @@ envmigrate() {
     return 0
   fi
 
-  ALL_VARS=( COMPOSE_FILE FEE_RECIPIENT WITHDRAWAL_CREDENTIALS EL_NODE GRAFFITI DEFAULT_GRAFFITI NETWORK MEV_BOOST MEV_RELAYS MEV_MIN_BID \
+  ALL_VARS=( COMPOSE_FILE FEE_RECIPIENT EL_NODE GRAFFITI DEFAULT_GRAFFITI NETWORK MEV_BOOST MEV_RELAYS MEV_MIN_BID \
     MEV_NODE CL_MAX_PEER_COUNT CL_MIN_PEER_COUNT EL_MAX_PEER_COUNT EL_MIN_PEER_COUNT DOMAIN ACME_EMAIL ANCIENT_DIR \
     AUTOPRUNE_NM LOGS_LABEL CF_DNS_API_TOKEN CF_ZONE_API_TOKEN CF_ZONE_ID AWS_PROFILE AWS_HOSTED_ZONE_ID \
     GRAFANA_HOST SIREN_HOST DISTRIBUTED BESU_HEAP TEKU_HEAP PROM_HOST HOST_IP SHARE_IP PRYSM_HOST EE_HOST \
@@ -3414,18 +3414,6 @@ config() {
   __during_config=0
 
   if [ "${__deployment}" = "lido_obol" ]; then
-# We are using the variable
-# shellcheck disable=SC2034
-    OBOL_BEACON_NODE_ENDPOINT="${CL_NODE}"
-# We are using the variable
-# shellcheck disable=SC2034
-    LIDO_DV_EXIT_BEACON_NODE_URL="${CL_NODE}"
-# We are using the variable
-# shellcheck disable=SC2034
-    VE_BEACON_NODE_URL="${CL_NODE}"
-# We are using the variable
-# shellcheck disable=SC2034
-    VE_EXECUTION_NODE_URL="http://execution:8545"
     CL_NODE="http://charon:3600"
     case "${NETWORK}" in
       "mainnet")
@@ -3582,19 +3570,7 @@ config() {
   set_value_in_env
   var=MEV_RELAYS
   set_value_in_env
-  if [[ "${__deployment}" =~ "lido_" ]]; then
-    var=WITHDRAWAL_CREDENTIALS
-    set_value_in_env
-  fi
   if [ "${__deployment}" = "lido_obol" ]; then
-    var=OBOL_BEACON_NODE_ENDPOINTS
-    set_value_in_env
-    var=VE_EXECUTION_NODE_URL
-    set_value_in_env
-    var=VE_BEACON_NODE_URL
-    set_value_in_env
-    var=LIDO_DV_EXIT_BEACON_NODE_URL
-    set_value_in_env
     var=LIDO_DV_EXIT_EXIT_EPOCH
     set_value_in_env
     var=VE_OPERATOR_ID
