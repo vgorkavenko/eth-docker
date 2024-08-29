@@ -2095,8 +2095,10 @@ __i_haz_keys_service() {
 
 __keys_usage() {
   echo "Call keymanager with an ACTION, one of:"
+  echo "  create-for-csm"
+  echo "      Create keys for Lido CSM"
   echo "  list"
-  echo "     Lists the public keys of all validators currently loaded into your validator client"
+  echo "      Lists the public keys of all validators currently loaded into your validator client"
   echo "  import"
   echo "      Import all keystore*.json in .eth/validator_keys while loading slashing protection data"
   echo "      in slashing_protection*.json files that match the public key(s) of the imported validator(s)"
@@ -2188,6 +2190,10 @@ keys() {
       docompose rm --force validator
       up
     fi
+  elif [ "${1:-}" = "create-for-csm" ]; then
+    var="NETWORK"
+    NETWORK=$(sed -n -e "s/^${var}=\(.*\)/\1/p" "${ENV_FILE}" || true)
+    query_lido_keys_generation
   elif [ "${1:-}" = "prepare-address-change" ]; then
     __i_haz_ethdo
     echo "Generating offline prep file"
@@ -3071,17 +3077,48 @@ https://0x8c7d33605ecef85403f8b7289c8058f440cbb6bf72b055dfe2f3e2c6695b6a1ea5a9cd
   fi
 }
 
+lido_withdrawal_credentials_address() {
+    __lido_address=""
+    case "${NETWORK}" in
+        "mainnet")
+            __lido_address="0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f"
+            ;;
+        "holesky")
+            __lido_address="0xF0179dEC45a37423EAD4FaD5fCb136197872EAd9"
+            ;;
+        *)
+            __lido_address="0x0000000000000000000000000000000000000000"
+            ;;
+    esac
+    echo "${__lido_address}"
+}
+
 query_lido_keys_generation() {
+    if [ "${NETWORK}" = "mainnet" ]; then
+      if (whiptail --title "Security warning" --yesno "Key generation is not recommended on MAINNET for security reasons.\n\nIt is recommended to Select 'No' to skip the step and generate keys in a more secure way later (ex. on an airgapped live USB)\n\nOtherwise, Select 'Yes' to proceed with key generation on this machine" 13 85) then
+         echo "Proceeding with key generation on MAINNET."
+      else
+         return 0
+      fi
+    fi
+
     __num_validators="1"
     __keystore_password=""
+    __keystore_password_confirm=""
     __num_validators=$(whiptail --title "Validators count" --inputbox "Enter the number of validators" 8 60 "${__num_validators}" 3>&1 1>&2 2>&3)
     while true; do
         __keystore_password=$(whiptail --title "Keystore password" --passwordbox "Enter validators keystore password (at least 8 chars)" 8 60 "${__keystore_password}" 3>&1 1>&2 2>&3)
+
         exitstatus=$?
         if [ $exitstatus -eq 0 ]; then
             if [[ ${#__keystore_password} -ge 8 ]]; then
-              echo "Keystore password set."
-              break
+              __keystore_password_confirm=$(whiptail --title "Keystore password" --passwordbox "Confirm validators keystore password" 8 60 "${__keystore_password_confirm}" 3>&1 1>&2 2>&3)
+              if [ "${__keystore_password}" = "${__keystore_password_confirm}" ]; then
+                  echo "Keystore password set."
+                  break
+              else
+                  whiptail --msgbox "Passwords do not match. Please try again." 10 60
+              fi
             else
               whiptail --msgbox "The keystore password secret needs to be at least 8 characters long. You can try \
 again or Cancel on the next screen." 10 75
@@ -3092,28 +3129,18 @@ again or Cancel on the next screen." 10 75
         fi
     done
 
-
     exitstatus=$?
     if [ $exitstatus -eq 0 ]; then
         echo "Your number of validators is:" "${__num_validators}"
-# This gets used, but shellcheck doesn't recognize that
-# shellcheck disable=SC2034
-        NUM_VALIDATORS="${__num_validators}"
-        var="NUM_VALIDATORS"
-        set_value_in_env
-# This gets used, but shellcheck doesn't recognize that
-# shellcheck disable=SC2034
-        KEYSTORE_PASSWORD="${__keystore_password}"
-        var="KEYSTORE_PASSWORD"
-        set_value_in_env
-        var="NETWORK"
-        set_value_in_env
-# This gets used, but shellcheck doesn't recognize that
-# shellcheck disable=SC2034
-        EXECUTION_ADDRESS="${WITHDRAWAL_CREDENTIALS}"
-        var="EXECUTION_ADDRESS"
-        set_value_in_env
-        docompose -f ./lido-deposit-cli.yml run --rm deposit-cli-new
+        __mnemonic="new"
+        if (whiptail --title "Mnemonic" --yesno "Do you want to use existing mnemonic?" 8 60) then
+            __mnemonic="existing"
+        fi
+        export NETWORK=${NETWORK} && docompose --profile tools run --rm deposit-cli-${__mnemonic} \
+            --execution_address "$(lido_withdrawal_credentials_address)" \
+            --num_validators "${__num_validators}" \
+            --keystore_password "${__keystore_password}" \
+            --non_interactive
     else
         echo "You chose Cancel."
         exit 1
@@ -3147,13 +3174,13 @@ query_lido_obol_cluster_definition() {
         ${__as_owner} curl -o ./.eth/cluster_definition.tmp -s "${__cluster_definition_url}" -H "Accept: application/json"
 # shellcheck disable=SC2086
         __cluster_definition_is_valid=$(docompose -f ./lido-obol.yml run --rm -v "$(pwd)"/.eth/cluster_definition.tmp:/cluster_definition.json:ro curl-jq sh -c \
-          "cat /cluster_definition.json | jq -r 'all(.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'${WITHDRAWAL_CREDENTIALS}'\")'" | tail -n 1)
+          "cat /cluster_definition.json | jq -r 'all(.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'$(lido_withdrawal_credentials_address)'\")'" | tail -n 1)
         set -e
         if [ "${__cluster_definition_is_valid}" = "true" ]; then
             echo "Your cluster definition url is:" "${__cluster_definition_url}"
             ${__as_owner} mv ./.eth/cluster_definition.tmp ./.eth/cluster-definition.json
         else
-            whiptail --title "Lido Obol cluster creation" --msgbox "Your cluster definition is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '${WITHDRAWAL_CREDENTIALS}'" 14 90
+            whiptail --title "Lido Obol cluster creation" --msgbox "Your cluster definition is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '$(lido_withdrawal_credentials_address)'" 14 90
             echo "Your cluster definition is NOT valid."
             ${__as_owner} rm ./.eth/cluster_definition.tmp
             exit 1
@@ -3372,24 +3399,11 @@ config() {
     if [[ "${__deployment}" = "node" || "${__deployment}" = "lido_csm" ]]; then
       query_graffiti
     fi
-    if [[ "${__deployment}" =~ "lido_" ]]; then
-      case "${NETWORK}" in
-          "mainnet")
-              WITHDRAWAL_CREDENTIALS="0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f"
-              ;;
-          "holesky")
-              WITHDRAWAL_CREDENTIALS="0xF0179dEC45a37423EAD4FaD5fCb136197872EAd9"
-              ;;
-          *)
-              WITHDRAWAL_CREDENTIALS="0x0000000000000000000000000000000000000000"
-              ;;
-      esac
-    fi
     if [ "${__deployment}" = "lido_csm" ]; then
       if (whiptail --title "Keys generation" --yesno "Do you want to generate validator keys?" 10 60) then
         query_lido_keys_generation
       else
-        whiptail --title "Attention" --msgbox "Please, make sure that you set 32 ETH when generated deposit data\nAnd right execution address for your validator keys: ${WITHDRAWAL_CREDENTIALS}\nOtherwise, your keys will not be valid!" 10 80
+        whiptail --title "Attention" --msgbox "Please, make sure that you set 32 ETH when generated deposit data\nAnd right execution address for your validator keys: $(lido_withdrawal_credentials_address)\nOtherwise, your keys will not be valid!" 10 80
       fi
       if [ "${NETWORK}" = "holesky" ]; then
         __link="https://csm.testnet.fi"
@@ -3452,11 +3466,11 @@ config() {
       if (whiptail --title "Lido Obol cluster exists" --yesno "Your cluster has already been created. Continue with it?" 10 60); then
 # shellcheck disable=SC2086
         __cluster_lock_is_valid=$(docompose -f ./lido-obol.yml run --rm -v "$(pwd)"/.eth/cluster-lock.json:/cluster-lock.json:ro curl-jq sh -c \
-          "cat /cluster-lock.json | jq -r 'all(.cluster_definition.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'${WITHDRAWAL_CREDENTIALS}'\")'" | tail -n 1)
+          "cat /cluster-lock.json | jq -r 'all(.cluster_definition.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'$(lido_withdrawal_credentials_address)'\")'" | tail -n 1)
         if [[ "${__cluster_lock_is_valid}" =~ "true" ]]; then
           echo "Your cluster lock is valid."
         else
-          whiptail --title "Lido Obol cluster definition" --msgbox "Your cluster lock file './.eth/cluster-lock.json' is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '${WITHDRAWAL_CREDENTIALS}'" 14 90
+          whiptail --title "Lido Obol cluster definition" --msgbox "Your cluster lock file './.eth/cluster-lock.json' is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '$(lido_withdrawal_credentials_address)'" 14 90
           echo "Your cluster lock is NOT valid."
           exit 1
         fi
@@ -3488,11 +3502,11 @@ config() {
         if (whiptail --title "Lido Obol cluster creation in process" --yesno "You already have cluster definition. Use it?" 10 60); then
 # shellcheck disable=SC2086
           __cluster_definition_is_valid=$(docompose -f ./lido-obol.yml run --rm -v "$(pwd)"/.eth/cluster-definition.json:/cluster-definition.json:ro curl-jq sh -c \
-            "cat /cluster-definition.json | jq -r 'all(.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'${WITHDRAWAL_CREDENTIALS}'\")'" | tail -n 1)
+            "cat /cluster-definition.json | jq -r 'all(.validators[]; .fee_recipient_address == \"'${FEE_RECIPIENT}'\" and .withdrawal_address == \"'$(lido_withdrawal_credentials_address)'\")'" | tail -n 1)
           if [ "${__cluster_definition_is_valid}" = "true" ]; then
             echo "Your cluster definition is valid."
           else
-            whiptail --title "Lido Obol cluster creation" --msgbox "Your cluster definition is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '${WITHDRAWAL_CREDENTIALS}'" 14 90
+            whiptail --title "Lido Obol cluster creation" --msgbox "Your cluster definition is not valid.\n\nCheck that every validator has \`fee_recipient_address\` and \`withdrawal_address\` equal to Lido contracts and try again.\n\nLido fee recipient: '${FEE_RECIPIENT}'\nLido withdrawal credentials: '$(lido_withdrawal_credentials_address)'" 14 90
             echo "Your cluster definition is NOT valid."
             exit 1
           fi
@@ -3535,10 +3549,11 @@ config() {
   if [ "${__deployment}" = "lido_obol" ]; then
     COMPOSE_FILE="${COMPOSE_FILE}:lido-obol.yml"
   fi
-  if [ "${__deployment}" = "lido_csm" ]; then
-    COMPOSE_FILE="${COMPOSE_FILE}:lido-deposit-cli.yml"
-  elif { [ "${__deployment}" = "node" ] || [ "${__deployment}" = "rocket" ]; } \
+  if { [ "${__deployment}" = "node" ] || [ "${__deployment}" = "rocket" ]; } \
   && [ "${NETWORK}" = "holesky" ]; then
+    COMPOSE_FILE="${COMPOSE_FILE}:deposit-cli.yml"
+  fi
+  if [ "${__deployment}" = "lido_csm" ]; then
     COMPOSE_FILE="${COMPOSE_FILE}:deposit-cli.yml"
   fi
 # Not multi-arch, this would break on ARM64
