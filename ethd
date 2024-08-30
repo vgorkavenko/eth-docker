@@ -3093,11 +3093,16 @@ lido_withdrawal_credentials_address() {
     echo "${__lido_address}"
 }
 
+lido_keys_attention_message() {
+  whiptail --title "Attention" --msgbox "Please, make sure that you set 32 ETH when generated deposit data\nAnd right execution address for your validator keys: $(lido_withdrawal_credentials_address)\nOtherwise, your keys will not be valid!" 10 80
+}
+
 query_lido_keys_generation() {
     if [ "${NETWORK}" = "mainnet" ]; then
       if (whiptail --title "Security warning" --yesno "Key generation is not recommended on MAINNET for security reasons.\n\nIt is recommended to Select 'No' to skip the step and generate keys in a more secure way later (ex. on an airgapped live USB)\n\nOtherwise, Select 'Yes' to proceed with key generation on this machine" 13 85) then
          echo "Proceeding with key generation on MAINNET."
       else
+         lido_keys_attention_message
          return 0
       fi
     fi
@@ -3404,7 +3409,7 @@ config() {
       if (whiptail --title "Keys generation" --yesno "Do you want to generate validator keys?" 10 60) then
         query_lido_keys_generation
       else
-        whiptail --title "Attention" --msgbox "Please, make sure that you set 32 ETH when generated deposit data\nAnd right execution address for your validator keys: $(lido_withdrawal_credentials_address)\nOtherwise, your keys will not be valid!" 10 80
+        lido_keys_attention_message
       fi
       if [ "${NETWORK}" = "holesky" ]; then
         __link="https://csm.testnet.fi"
