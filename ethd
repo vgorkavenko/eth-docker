@@ -3137,6 +3137,7 @@ again or Cancel on the next screen." 10 75
             __mnemonic="existing"
         fi
         export NETWORK=${NETWORK} && docompose --profile tools run --rm deposit-cli-${__mnemonic} \
+            --uid "$(id -u)" \
             --execution_address "$(lido_withdrawal_credentials_address)" \
             --num_validators "${__num_validators}" \
             --keystore_password "${__keystore_password}" \
