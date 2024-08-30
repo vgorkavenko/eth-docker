@@ -3132,9 +3132,9 @@ again or Cancel on the next screen." 10 75
     exitstatus=$?
     if [ $exitstatus -eq 0 ]; then
         echo "Your number of validators is:" "${__num_validators}"
-        __mnemonic="new"
-        if (whiptail --title "Mnemonic" --yesno "Do you want to use existing mnemonic?" 8 60) then
-            __mnemonic="existing"
+        __mnemonic="existing"
+        if (whiptail --title "Mnemonic" --yesno "Do you want to generate new mnemonic?" 8 60) then
+            __mnemonic="new"
         fi
         export NETWORK=${NETWORK} && docompose --profile tools run --rm deposit-cli-${__mnemonic} \
             --uid "$(id -u)" \
